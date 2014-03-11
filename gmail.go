@@ -14,9 +14,11 @@ import (
 	"math/big"
 	"net"
 	"net/http"
+	"net/mail"
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 
 	"code.google.com/p/go-imap/go1/imap"
 )
@@ -31,17 +33,18 @@ const (
 	nsNotify  = "google:mail:notify"
 )
 
-type MailHandler func(i interface{})
+type MailHandler func(msg *mail.Message) error
 
 var DefaultConfig tls.Config
 
 type Client struct {
-	conn   net.Conn // connection to server
-	imapc  *imap.Client
-	jid    string // Jabber ID for our connection
-	domain string
-	p      *xml.Decoder
-	opts   *Options
+	conn     net.Conn // connection to server
+	imapc    *imap.Client
+	jid      string // Jabber ID for our connection
+	domain   string
+	p        *xml.Decoder
+	opts     *Options
+	imapLock *sync.Mutex
 }
 
 func connect(host, user, passwd string) (net.Conn, error) {
@@ -116,7 +119,7 @@ type Options struct {
 
 // NewClient establishes a new Client connection based on a set of Options.
 func (o Options) NewClient() *Client {
-	return &Client{opts: &o}
+	return &Client{opts: &o, imapLock: &sync.Mutex{}}
 }
 
 func (self *Client) Start() (err error) {
@@ -164,7 +167,9 @@ func (self *Client) Start() (err error) {
 }
 
 func (self *Client) checkMail() (err error) {
-	cmd, err := self.imapc.UIDSearch("UNSEEN")
+	self.imapLock.Lock()
+	defer self.imapLock.Unlock()
+	cmd, err := self.imapc.UIDSearch("ALL") //"UNKEYWORD FETCHEDBYAPI")
 	if err != nil {
 		return
 	}
@@ -175,29 +180,50 @@ func (self *Client) checkMail() (err error) {
 
 		// Process command data
 		for _, rsp := range cmd.Data {
-			for _, field := range rsp.Fields[1:] {
-				fetchSeq.AddNum(field.(uint32))
+			for _, res := range rsp.SearchResults() {
+				fmt.Println(res)
+				fetchSeq.AddNum(res)
 			}
 		}
 		cmd.Data = nil
 		self.imapc.Data = nil
 	}
 
-	var fetchCmd *imap.Command
-	fetchCmd, err = self.imapc.UIDFetch(fetchSeq)
-	if err != nil {
-		return
-	}
-	for fetchCmd.InProgress() {
-		// Wait for the next response (no timeout)
-		self.imapc.Recv(-1)
-
-		// Process command data
-		for _, rsp := range fetchCmd.Data {
-			fmt.Printf("%#v\n", rsp)
+	if !fetchSeq.Empty() {
+		var fetchCmd *imap.Command
+		fetchCmd, err = self.imapc.UIDFetch(fetchSeq, "RFC822.TEXT", "RFC822.HEADER")
+		if err != nil {
+			return
 		}
-		cmd.Data = nil
-		self.imapc.Data = nil
+		for fetchCmd.InProgress() {
+			// Wait for the next response (no timeout)
+			self.imapc.Recv(-1)
+
+			// Process command data
+			for _, rsp := range fetchCmd.Data {
+				buf := &bytes.Buffer{}
+				if _, err = rsp.MessageInfo().Attrs["RFC822.HEADER"].(io.WriterTo).WriteTo(buf); err != nil {
+					return
+				}
+				if _, err = rsp.MessageInfo().Attrs["RFC822.TEXT"].(io.WriterTo).WriteTo(buf); err != nil {
+					return
+				}
+				var msg *mail.Message
+				if msg, err = mail.ReadMessage(buf); err != nil {
+					return
+				}
+				if err = self.opts.MailHandler(msg); err != nil {
+					return
+				}
+			}
+			fetchCmd.Data = nil
+			self.imapc.Data = nil
+		}
+		/*
+			if _, err = imap.Wait(self.imapc.Store(fetchSeq, "FLAGS", []imap.Field{"FETCHEDBYAPI"})); err != nil {
+				return
+			}
+		*/
 	}
 
 	return
