@@ -17,7 +17,8 @@ import (
 	"net/url"
 	"os"
 	"strings"
-	"time"
+
+	"code.google.com/p/go-imap/go1/imap"
 )
 
 const (
@@ -110,9 +111,6 @@ type Options struct {
 
 	// Mail handler function
 	MailHandler MailHandler
-
-	// How old email to try and fetch
-	NewerThan time.Time
 }
 
 // NewClient establishes a new Client connection based on a set of Options.
@@ -146,6 +144,31 @@ func (self *Client) Start() (err error) {
 
 	go self.handleMail()
 
+	imapc, err := imap.DialTLS("imap.gmail.com:993", nil)
+	if err != nil {
+		return
+	}
+	if _, err = imapc.Login(self.opts.User, self.opts.Password); err != nil {
+		return
+	}
+	if _, err = imapc.Select("INBOX", false); err != nil {
+		return
+	}
+	cmd, err := imapc.UIDSearch("UNSEEN")
+	if err != nil {
+		return
+	}
+	for cmd.InProgress() {
+		// Wait for the next response (no timeout)
+		imapc.Recv(-1)
+
+		// Process command data
+		for _, rsp := range cmd.Data {
+			fmt.Println(rsp)
+		}
+		imapc.Data = nil
+	}
+
 	return
 }
 
@@ -169,14 +192,13 @@ func (self *Client) handleMail() {
 // NewClient creates a new connection to a host given as "hostname" or "hostname:port".
 // If host is not specified, the  DNS SRV should be used to find the host from the domainpart of the JID.
 // Default the port to 5222.
-func NewClient(user, passwd string, newerThan time.Time, mailHandler MailHandler) *Client {
+func NewClient(user, passwd string, mailHandler MailHandler) *Client {
 	opts := Options{
 		Host:        gtalkAddr,
 		User:        user,
 		Password:    passwd,
 		Debug:       true,
 		MailHandler: mailHandler,
-		NewerThan:   newerThan,
 	}
 	return opts.NewClient()
 }
@@ -405,7 +427,7 @@ func (c *Client) init(o *Options) error {
 		return errors.New(fmt.Sprintf("expected to find %v, but got %+v", nsNotify, ciq.Query.Features))
 	}
 
-	fmt.Fprintf(c.conn, fmt.Sprintf("<iq type='get' from='%v'	to='%v' id='mail-request-1'><query xmlns='google:mail:notify' newer-than-time='%v'/></iq>", c.jid, o.User, o.NewerThan.UnixNano()/int64(time.Millisecond)))
+	fmt.Fprintf(c.conn, fmt.Sprintf("<iq type='get' from='%v'	to='%v' id='mail-request-1'><query xmlns='google:mail:notify'/></iq>", c.jid, o.User))
 
 	name, i, err = next(c.p)
 	if name.Space != nsClient || name.Local != "iq" {
