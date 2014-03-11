@@ -37,7 +37,8 @@ var DefaultConfig tls.Config
 
 type Client struct {
 	conn   net.Conn // connection to server
-	jid    string   // Jabber ID for our connection
+	imapc  *imap.Client
+	jid    string // Jabber ID for our connection
 	domain string
 	p      *xml.Decoder
 	opts   *Options
@@ -144,29 +145,59 @@ func (self *Client) Start() (err error) {
 
 	go self.handleMail()
 
-	imapc, err := imap.DialTLS("imap.gmail.com:993", nil)
+	self.imapc, err = imap.DialTLS("imap.gmail.com:993", nil)
 	if err != nil {
 		return
 	}
-	if _, err = imapc.Login(self.opts.User, self.opts.Password); err != nil {
+	if _, err = self.imapc.Login(self.opts.User, self.opts.Password); err != nil {
 		return
 	}
-	if _, err = imapc.Select("INBOX", false); err != nil {
+	if _, err = self.imapc.Select("INBOX", false); err != nil {
 		return
 	}
-	cmd, err := imapc.UIDSearch("UNSEEN")
+
+	if err = self.checkMail(); err != nil {
+		return
+	}
+
+	return
+}
+
+func (self *Client) checkMail() (err error) {
+	cmd, err := self.imapc.UIDSearch("UNSEEN")
 	if err != nil {
 		return
 	}
+	fetchSeq := &imap.SeqSet{}
 	for cmd.InProgress() {
 		// Wait for the next response (no timeout)
-		imapc.Recv(-1)
+		self.imapc.Recv(-1)
 
 		// Process command data
 		for _, rsp := range cmd.Data {
-			fmt.Println(rsp)
+			for _, field := range rsp.Fields[1:] {
+				fetchSeq.AddNum(field.(uint32))
+			}
 		}
-		imapc.Data = nil
+		cmd.Data = nil
+		self.imapc.Data = nil
+	}
+
+	var fetchCmd *imap.Command
+	fetchCmd, err = self.imapc.UIDFetch(fetchSeq)
+	if err != nil {
+		return
+	}
+	for fetchCmd.InProgress() {
+		// Wait for the next response (no timeout)
+		self.imapc.Recv(-1)
+
+		// Process command data
+		for _, rsp := range fetchCmd.Data {
+			fmt.Printf("%#v\n", rsp)
+		}
+		cmd.Data = nil
+		self.imapc.Data = nil
 	}
 
 	return
@@ -178,6 +209,7 @@ func (self *Client) handleMail() {
 		if err != nil {
 			fmt.Println(err)
 			self.Close()
+			self.Start()
 			return
 		}
 		if name.Space == nsClient && name.Local == "iq" {
@@ -204,7 +236,12 @@ func NewClient(user, passwd string, mailHandler MailHandler) *Client {
 }
 
 func (c *Client) Close() error {
-	return c.conn.Close()
+	err1 := c.conn.Close()
+	_, err2 := c.imapc.Close(false)
+	if err1 != nil {
+		return err1
+	}
+	return err2
 }
 
 func saslDigestResponse(username, realm, passwd, nonce, cnonceStr,
