@@ -4,11 +4,12 @@ import (
 	"bytes"
 	"io"
 	"net/mail"
+	"github.com/jhillyerd/go.enmime"
 
 	"code.google.com/p/go-imap/go1/imap"
 )
 
-type MailHandler func(*mail.Message) error
+type MailHandler func(*enmime.MIMEBody) error
 
 var OldKeyword = "FETCHEDBYAPI"
 
@@ -38,8 +39,8 @@ func (self *Client) connect() (result *imap.Client, err error) {
 	return
 }
 
-func (self *Client) GetNew() (result []mail.Message, err error) {
-	handler := func(msg *mail.Message) error {
+func (self *Client) GetNew() (result []enmime.MIMEBody, err error) {
+	handler := func(msg *enmime.MIMEBody) error {
 		result = append(result, *msg)
 		return nil
 	}
@@ -85,7 +86,11 @@ func (self *Client) HandleNew(handler MailHandler) (err error) {
 			if msg, err = mail.ReadMessage(buf); err != nil {
 				return
 			}
-			if e := handler(msg); e == nil {
+			var mimebod *enmime.MIMEBody
+			if mimebod, err = enmime.ParseMIMEBody(msg); err != nil {
+				return
+			}
+			if e := handler(mimebod); e == nil {
 				markSeq.AddNum(rsp.MessageInfo().UID)
 			}
 		}

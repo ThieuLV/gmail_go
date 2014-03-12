@@ -2,8 +2,8 @@ package gmail
 
 import (
 	"fmt"
-	"net/mail"
 
+	"github.com/jhillyerd/go.enmime"
 	"github.com/zond/gmail/imap"
 	"github.com/zond/gmail/xmpp"
 )
@@ -19,7 +19,7 @@ func New(account, password string) (result *Client) {
 	result = &Client{
 		xmppClient: xmpp.New(account, password),
 		imapClient: imap.New(account, password),
-		mailHandler: func(msg *mail.Message) error {
+		mailHandler: func(msg *enmime.MIMEBody) error {
 			fmt.Println("Got", msg)
 			return nil
 		},
