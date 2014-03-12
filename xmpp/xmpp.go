@@ -12,6 +12,7 @@ import (
 	"io"
 	"math/big"
 	"net"
+	"os"
 	"strings"
 )
 
@@ -37,6 +38,7 @@ type Client struct {
 	password     string
 	errorHandler func(e error)
 	mailHandler  func()
+	debug        bool
 }
 
 func New(user, password string) *Client {
@@ -50,6 +52,11 @@ func New(user, password string) *Client {
 			fmt.Println("NEW MAIL")
 		},
 	}
+}
+
+func (self *Client) Debug() *Client {
+	self.debug = true
+	return self
 }
 
 func (self *Client) MailHandler(f func()) *Client {
@@ -118,7 +125,13 @@ func (self *Client) connect() (err error) {
 }
 
 func (self *Client) init() error {
-	self.p = xml.NewDecoder(self.conn)
+	var r io.Reader
+	r = self.conn
+	if self.debug {
+		r = tee{self.conn, os.Stdout}
+	}
+
+	self.p = xml.NewDecoder(r)
 
 	a := strings.SplitN(self.user, "@", 2)
 	if len(a) != 2 {
@@ -587,4 +600,18 @@ func xmlEscape(s string) string {
 		}
 	}
 	return b.String()
+}
+
+type tee struct {
+	r io.Reader
+	w io.Writer
+}
+
+func (t tee) Read(p []byte) (n int, err error) {
+	n, err = t.r.Read(p)
+	if n > 0 {
+		t.w.Write(p[0:n])
+		t.w.Write([]byte("\n"))
+	}
+	return
 }

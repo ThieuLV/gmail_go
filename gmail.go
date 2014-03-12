@@ -9,9 +9,10 @@ import (
 )
 
 type Client struct {
-	xmppClient  *xmpp.Client
-	imapClient  *imap.Client
-	mailHandler imap.MailHandler
+	xmppClient   *xmpp.Client
+	imapClient   *imap.Client
+	mailHandler  imap.MailHandler
+	errorHandler func(e error)
 }
 
 func New(account, password string) (result *Client) {
@@ -29,6 +30,16 @@ func New(account, password string) (result *Client) {
 	return
 }
 
+func (self *Client) Debug() *Client {
+	self.xmppClient.Debug()
+	return self
+}
+
+func (self *Client) ErrorHandler(f func(e error)) *Client {
+	self.xmppClient.ErrorHandler(f)
+	return self
+}
+
 func (self *Client) MailHandler(f imap.MailHandler) *Client {
 	self.mailHandler = f
 	return self
@@ -41,10 +52,5 @@ func (self *Client) Start() {
 }
 
 func (self *Client) Close() error {
-	err1 := self.xmppClient.Close()
-	err2 := self.imapClient.Close()
-	if err1 != nil {
-		return err1
-	}
-	return err2
+	return self.xmppClient.Close()
 }
