@@ -2,6 +2,7 @@ package gmail
 
 import (
 	"fmt"
+	"net/smtp"
 
 	"github.com/jhillyerd/go.enmime"
 	"github.com/zond/gmail/imap"
@@ -9,6 +10,8 @@ import (
 )
 
 type Client struct {
+	account      string
+	password     string
 	xmppClient   *xmpp.Client
 	imapClient   *imap.Client
 	mailHandler  imap.MailHandler
@@ -17,6 +20,8 @@ type Client struct {
 
 func New(account, password string) (result *Client) {
 	result = &Client{
+		account:    account,
+		password:   password,
 		xmppClient: xmpp.New(account, password),
 		imapClient: imap.New(account, password),
 		mailHandler: func(msg *enmime.MIMEBody) error {
@@ -28,6 +33,12 @@ func New(account, password string) (result *Client) {
 		result.imapClient.HandleNew(result.mailHandler)
 	})
 	return
+}
+
+func (self *Client) Send(subject, message string, recips ...string) (err error) {
+	body := fmt.Sprintf("To: %v\r\nSubject: %v\r\n\r\n%v", recips, subject, message)
+	auth := smtp.PlainAuth("", self.account, self.password, "smtp.gmail.com")
+	return smtp.SendMail("smtp.gmail.com:587", auth, self.account, recips, []byte(body))
 }
 
 func (self *Client) Debug() *Client {
@@ -45,10 +56,10 @@ func (self *Client) MailHandler(f imap.MailHandler) *Client {
 	return self
 }
 
-func (self *Client) Start() {
+func (self *Client) Start() *Client {
 	self.xmppClient.Start()
 	self.imapClient.HandleNew(self.mailHandler)
-	return
+	return self
 }
 
 func (self *Client) Close() error {
