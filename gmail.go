@@ -3,6 +3,7 @@ package gmail
 import (
 	"fmt"
 	"net/smtp"
+	"strings"
 
 	"github.com/jhillyerd/go.enmime"
 	"github.com/zond/gmail/imap"
@@ -36,7 +37,7 @@ func New(account, password string) (result *Client) {
 }
 
 func (self *Client) Send(subject, message string, recips ...string) (err error) {
-	body := fmt.Sprintf("To: %v\r\nSubject: %v\r\n\r\n%v", recips, subject, message)
+	body := fmt.Sprintf("To: %v\r\nSubject: %v\r\n\r\n%v", strings.Join(recips, ", "), subject, message)
 	auth := smtp.PlainAuth("", self.account, self.password, "smtp.gmail.com")
 	return smtp.SendMail("smtp.gmail.com:587", auth, self.account, recips, []byte(body))
 }
