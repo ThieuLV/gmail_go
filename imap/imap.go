@@ -41,6 +41,11 @@ func (self *Client) connect() (err error) {
 	return
 }
 
+func (self *Client) Close() (err error) {
+	_, err = self.client.Close(false)
+	return
+}
+
 func (self *Client) GetNew() (result []mail.Message, err error) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
@@ -49,16 +54,21 @@ func (self *Client) GetNew() (result []mail.Message, err error) {
 			return
 		}
 	}
-	if result, err = self.getNew(); err != nil && strings.Contains(err.Error(), "closed") {
+	handler := func(msg *mail.Message) error {
+		result = append(result, *msg)
+		return nil
+	}
+	if err = self.handleNew(handler); err != nil && strings.Contains(err.Error(), "closed") {
 		if err = self.connect(); err != nil {
 			return
 		}
-		result, err = self.getNew()
+		result = nil
+		err = self.handleNew(handler)
 	}
 	return
 }
 
-func (self *Client) getNew() (result []mail.Message, err error) {
+func (self *Client) handleNew(handler func(msg *mail.Message) error) (err error) {
 	cmd, err := self.client.UIDSearch("UNKEYWORD " + OldKeyword)
 	if err != nil {
 		return
@@ -81,6 +91,7 @@ func (self *Client) getNew() (result []mail.Message, err error) {
 		if err != nil {
 			return
 		}
+		markSeq := &imap.SeqSet{}
 		for fetchCmd.InProgress() {
 			self.client.Recv(-1)
 			for _, rsp := range fetchCmd.Data {
@@ -95,13 +106,17 @@ func (self *Client) getNew() (result []mail.Message, err error) {
 				if msg, err = mail.ReadMessage(buf); err != nil {
 					return
 				}
-				result = append(result, *msg)
+				if e := handler(msg); e != nil {
+					markSeq.AddNum(rsp.MessageInfo().UID)
+				}
 			}
 			fetchCmd.Data = nil
 			self.client.Data = nil
 		}
-		if _, err = imap.Wait(self.client.Store(foundSeq, "FLAGS", []imap.Field{OldKeyword})); err != nil {
-			return
+		if !markSeq.Empty() {
+			if _, err = imap.Wait(self.client.Store(markSeq, "FLAGS", []imap.Field{OldKeyword})); err != nil {
+				return
+			}
 		}
 	}
 	return
