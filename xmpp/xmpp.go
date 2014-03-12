@@ -12,7 +12,6 @@ import (
 	"io"
 	"math/big"
 	"net"
-	"os"
 	"strings"
 )
 
@@ -120,8 +119,6 @@ func (self *Client) connect() (err error) {
 
 func (self *Client) init() error {
 	self.p = xml.NewDecoder(self.conn)
-	// For debugging: the following causes the plaintext of the connection to be duplicated to stdout.
-	self.p = xml.NewDecoder(tee{self.conn, os.Stdout})
 
 	a := strings.SplitN(self.user, "@", 2)
 	if len(a) != 2 {
@@ -590,18 +587,4 @@ func xmlEscape(s string) string {
 		}
 	}
 	return b.String()
-}
-
-type tee struct {
-	r io.Reader
-	w io.Writer
-}
-
-func (t tee) Read(p []byte) (n int, err error) {
-	n, err = t.r.Read(p)
-	if n > 0 {
-		t.w.Write(p[0:n])
-		t.w.Write([]byte("\n"))
-	}
-	return
 }

@@ -10,6 +10,8 @@ import (
 	"code.google.com/p/go-imap/go1/imap"
 )
 
+type MailHandler func(*mail.Message) error
+
 var OldKeyword = "FETCHEDBYAPI"
 
 type Client struct {
@@ -58,17 +60,17 @@ func (self *Client) GetNew() (result []mail.Message, err error) {
 		result = append(result, *msg)
 		return nil
 	}
-	if err = self.handleNew(handler); err != nil && strings.Contains(err.Error(), "closed") {
+	if err = self.HandleNew(handler); err != nil && strings.Contains(err.Error(), "closed") {
 		if err = self.connect(); err != nil {
 			return
 		}
 		result = nil
-		err = self.handleNew(handler)
+		err = self.HandleNew(handler)
 	}
 	return
 }
 
-func (self *Client) handleNew(handler func(msg *mail.Message) error) (err error) {
+func (self *Client) HandleNew(handler MailHandler) (err error) {
 	cmd, err := self.client.UIDSearch("UNKEYWORD " + OldKeyword)
 	if err != nil {
 		return
