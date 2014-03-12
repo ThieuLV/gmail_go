@@ -30,18 +30,71 @@ const (
 var DefaultConfig tls.Config
 
 type Client struct {
-	conn     *tls.Conn // connection to server
-	jid      string    // Jabber ID for our connection
-	domain   string
-	p        *xml.Decoder
-	user     string
-	password string
+	conn         *tls.Conn // connection to server
+	jid          string    // Jabber ID for our connection
+	domain       string
+	p            *xml.Decoder
+	user         string
+	password     string
+	errorHandler func(e error)
+	mailHandler  func()
 }
 
 func New(user, password string) *Client {
 	return &Client{
 		user:     user,
 		password: password,
+		errorHandler: func(e error) {
+			fmt.Println(e)
+		},
+		mailHandler: func() {
+			fmt.Println("NEW MAIL")
+		},
+	}
+}
+
+func (self *Client) MailHandler(f func()) *Client {
+	self.mailHandler = f
+	return self
+}
+
+func (self *Client) ErrorHandler(f func(e error)) *Client {
+	self.errorHandler = f
+	return self
+}
+
+func (self *Client) Start() (err error) {
+	if err = self.connect(); err != nil {
+		return
+	}
+
+	go self.handleMail()
+
+	return
+}
+
+func (self *Client) handleMail() {
+	for {
+		name, i, err := next(self.p)
+		if err != nil {
+			if strings.Contains(err.Error(), "closed") {
+				self.Close()
+				self.Start()
+			} else {
+				if self.errorHandler != nil {
+					self.errorHandler(err)
+				}
+			}
+			return
+		}
+		if name.Space == nsClient && name.Local == "iq" {
+			if ciq, ok := i.(*clientIQ); ok && ciq.To == self.jid && ciq.Type == "set" && ciq.NewMail != nil {
+				fmt.Fprintf(self.conn, "<iq type='result' from='%v' to='%v' id='%v' />\n", self.user, self.jid, ciq.Id)
+				if self.mailHandler != nil {
+					self.mailHandler()
+				}
+			}
+		}
 	}
 }
 
@@ -57,57 +110,12 @@ func (self *Client) connect() (err error) {
 	if err = self.conn.VerifyHostname(gtalkHost); err != nil {
 		return
 	}
-	return
-}
-
-func (self *Client) Start() (err error) {
-	if err = self.connect(); err != nil {
-		return
-	}
-
 	if err = self.init(); err != nil {
 		self.Close()
 		return
 	}
 
 	return
-}
-
-func (c *Client) Close() error {
-	return c.conn.Close()
-}
-
-func saslDigestResponse(username, realm, passwd, nonce, cnonceStr,
-	authenticate, digestUri, nonceCountStr string) string {
-	h := func(text string) []byte {
-		h := md5.New()
-		h.Write([]byte(text))
-		return h.Sum(nil)
-	}
-	hex := func(bytes []byte) string {
-		return fmt.Sprintf("%x", bytes)
-	}
-	kd := func(secret, data string) []byte {
-		return h(secret + ":" + data)
-	}
-
-	a1 := string(h(username+":"+realm+":"+passwd)) + ":" +
-		nonce + ":" + cnonceStr
-	a2 := authenticate + ":" + digestUri
-	response := hex(kd(hex(h(a1)), nonce+":"+
-		nonceCountStr+":"+cnonceStr+":auth:"+
-		hex(h(a2))))
-	return response
-}
-
-func cnonce() string {
-	randSize := big.NewInt(0)
-	randSize.Lsh(big.NewInt(1), 64)
-	cn, err := rand.Int(rand.Reader, randSize)
-	if err != nil {
-		return ""
-	}
-	return fmt.Sprintf("%016x", cn)
 }
 
 func (self *Client) init() error {
@@ -304,6 +312,43 @@ func (self *Client) init() error {
 	}
 
 	return nil
+}
+
+func (c *Client) Close() error {
+	return c.conn.Close()
+}
+
+func saslDigestResponse(username, realm, passwd, nonce, cnonceStr,
+	authenticate, digestUri, nonceCountStr string) string {
+	h := func(text string) []byte {
+		h := md5.New()
+		h.Write([]byte(text))
+		return h.Sum(nil)
+	}
+	hex := func(bytes []byte) string {
+		return fmt.Sprintf("%x", bytes)
+	}
+	kd := func(secret, data string) []byte {
+		return h(secret + ":" + data)
+	}
+
+	a1 := string(h(username+":"+realm+":"+passwd)) + ":" +
+		nonce + ":" + cnonceStr
+	a2 := authenticate + ":" + digestUri
+	response := hex(kd(hex(h(a1)), nonce+":"+
+		nonceCountStr+":"+cnonceStr+":auth:"+
+		hex(h(a2))))
+	return response
+}
+
+func cnonce() string {
+	randSize := big.NewInt(0)
+	randSize.Lsh(big.NewInt(1), 64)
+	cn, err := rand.Int(rand.Reader, randSize)
+	if err != nil {
+		return ""
+	}
+	return fmt.Sprintf("%016x", cn)
 }
 
 // RFC 3920  C.1  Streams name space
