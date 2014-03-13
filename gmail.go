@@ -62,18 +62,15 @@ func (self *Client) MailHandler(f imap.MailHandler) *Client {
 	return self
 }
 
-func (self *Client) Start() *Client {
-	if err := self.xmppClient.Start(); err != nil {
-		if self.errorHandler != nil {
-			self.errorHandler(err)
-		}
+func (self *Client) Start() (result *Client, err error) {
+	if err = self.xmppClient.Start(); err != nil {
+		return
 	}
-	if err := self.imapClient.HandleNew(self.mailHandler); err != nil {
-		if self.errorHandler != nil {
-			self.errorHandler(err)
-		}
+	if err = self.imapClient.HandleNew(self.mailHandler); err != nil {
+		return
 	}
-	return self
+	result = self
+	return
 }
 
 func (self *Client) Close() error {

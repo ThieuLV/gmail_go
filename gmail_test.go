@@ -13,10 +13,13 @@ import (
 
 func TestNotifications(t *testing.T) {
 	inc := make(chan *enmime.MIMEBody)
-	c := New(os.Getenv("GMAIL_ACCOUNT"), os.Getenv("GMAIL_PASSWORD")).MailHandler(func(msg *enmime.MIMEBody) error {
+	c, err := New(os.Getenv("GMAIL_ACCOUNT"), os.Getenv("GMAIL_PASSWORD")).MailHandler(func(msg *enmime.MIMEBody) error {
 		inc <- msg
 		return nil
 	}).Start()
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
 	rand.Seed(time.Now().UnixNano())
 	subj := fmt.Sprint(rand.Int63())
 	body := fmt.Sprint(rand.Int63())
