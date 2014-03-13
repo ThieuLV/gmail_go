@@ -29,9 +29,14 @@ func New(account, password string) (result *Client) {
 			fmt.Println("Got", msg)
 			return nil
 		},
+		errorHandler: func(e error) {
+			fmt.Println("Error", e)
+		},
 	}
 	result.xmppClient.MailHandler(func() {
 		result.imapClient.HandleNew(result.mailHandler)
+	}).ErrorHandler(func(e error) {
+		result.errorHandler(e)
 	})
 	return
 }
@@ -48,7 +53,7 @@ func (self *Client) Debug() *Client {
 }
 
 func (self *Client) ErrorHandler(f func(e error)) *Client {
-	self.xmppClient.ErrorHandler(f)
+	self.errorHandler = f
 	return self
 }
 
@@ -58,8 +63,16 @@ func (self *Client) MailHandler(f imap.MailHandler) *Client {
 }
 
 func (self *Client) Start() *Client {
-	self.xmppClient.Start()
-	self.imapClient.HandleNew(self.mailHandler)
+	if err := self.xmppClient.Start(); err != nil {
+		if self.errorHandler != nil {
+			self.errorHandler(err)
+		}
+	}
+	if err := self.imapClient.HandleNew(self.mailHandler); err != nil {
+		if self.errorHandler != nil {
+			self.errorHandler(err)
+		}
+	}
 	return self
 }
 
