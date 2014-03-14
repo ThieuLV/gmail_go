@@ -23,7 +23,7 @@ func TestNotifications(t *testing.T) {
 	rand.Seed(time.Now().UnixNano())
 	subj := fmt.Sprint(rand.Int63())
 	body := fmt.Sprint(rand.Int63())
-	if err := c.Send(subj, body, os.Getenv("GMAIL_ACCOUNT")); err != nil {
+	if err := c.Send(os.Getenv("GMAIL_ACCOUNT"), subj, body, os.Getenv("GMAIL_ACCOUNT")); err != nil {
 		t.Fatalf("%v", err)
 	}
 	msg := <-inc

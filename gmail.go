@@ -41,8 +41,8 @@ func New(account, password string) (result *Client) {
 	return
 }
 
-func (self *Client) Send(subject, message string, recips ...string) (err error) {
-	body := fmt.Sprintf("To: %v\r\nSubject: %v\r\n\r\n%v", strings.Join(recips, ", "), subject, message)
+func (self *Client) Send(from, subject, message string, recips ...string) (err error) {
+	body := fmt.Sprintf("Reply-To: %v\r\nFrom: %v\r\nTo: %v\r\nSubject: %v\r\n\r\n%v", from, from, strings.Join(recips, ", "), subject, message)
 	auth := smtp.PlainAuth("", self.account, self.password, "smtp.gmail.com")
 	return smtp.SendMail("smtp.gmail.com:587", auth, self.account, recips, []byte(body))
 }
