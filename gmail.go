@@ -35,7 +35,9 @@ func New(account, password string) (result *Client) {
 		},
 	}
 	result.xmppClient.MailHandler(func() {
-		result.imapClient.HandleNew(result.mailHandler)
+		if err := result.imapClient.HandleNew(result.mailHandler); err != nil {
+			result.errorHandler(err)
+		}
 	}).ErrorHandler(func(e error) {
 		result.errorHandler(e)
 	})
