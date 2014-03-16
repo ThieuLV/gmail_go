@@ -44,14 +44,14 @@ func New(account, password string) (result *Client) {
 	return
 }
 
-var addrReg = regexp.MustCompile("(?i)[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,4}")
+var AddrReg = regexp.MustCompile("(?i)[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,4}")
 
 func (self *Client) Send(from, subject, message string, recips ...string) (err error) {
 	body := fmt.Sprintf("Reply-To: %v\r\nFrom: %v\r\nTo: %v\r\nSubject: %v\r\n\r\n%v", from, from, strings.Join(recips, ", "), subject, message)
 	auth := smtp.PlainAuth("", self.account, self.password, "smtp.gmail.com")
 	actualRecips := []string{}
 	for _, recip := range recips {
-		if match := addrReg.FindString(recip); match != "" {
+		if match := AddrReg.FindString(recip); match != "" {
 			actualRecips = append(actualRecips, match)
 		}
 	}
