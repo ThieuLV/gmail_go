@@ -2,14 +2,32 @@ package gmail
 
 import (
 	"fmt"
+	"mime"
 	"net/smtp"
 	"regexp"
 	"strings"
+	"code.google.com/p/mahonia"
 
 	"github.com/jhillyerd/go.enmime"
 	"github.com/zond/gmail/imap"
 	"github.com/zond/gmail/xmpp"
 )
+
+func DecodeText(body, mimeContent string) string {
+	_, params, err := mime.ParseMediaType(mimeContent)
+	if err != nil {
+		return body
+	}
+	charset := params["charset"]
+	if charset == "" {
+		return body
+	}
+	decoder := mahonia.NewDecoder(charset)
+	if decoder == nil {
+		return body
+	}
+	return decoder.ConvertString(body)
+}
 
 type Client struct {
 	account      string
