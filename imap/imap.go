@@ -90,9 +90,11 @@ func (self *Client) HandleNew(handler MailHandler) (err error) {
 			if mimebod, err = enmime.ParseMIMEBody(msg); err != nil {
 				return
 			}
-			if e := handler(mimebod); e == nil {
-				markSeq.AddNum(rsp.MessageInfo().UID)
-			}
+			go func() {
+				if e := handler(mimebod); e == nil {
+					markSeq.AddNum(rsp.MessageInfo().UID)
+				}
+			}()
 		}
 		if !markSeq.Empty() {
 			if _, err = imap.Wait(client.Store(markSeq, "FLAGS", []imap.Field{OldKeyword})); err != nil {
