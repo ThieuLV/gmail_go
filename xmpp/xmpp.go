@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/xml"
 	"errors"
+	"log"
 	"fmt"
 	"io"
 	"math/big"
@@ -521,6 +522,7 @@ func nextStart(p *xml.Decoder) (xml.StartElement, error) {
 			return t, nil
 		}
 	}
+	log.Printf("github.com/zond/gmail/xmpp unable to find next start element!")
 	panic("unreachable")
 }
 
