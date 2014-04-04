@@ -8,9 +8,9 @@ import (
 	"encoding/base64"
 	"encoding/xml"
 	"errors"
-	"log"
 	"fmt"
 	"io"
+	"log"
 	"math/big"
 	"net"
 	"os"
@@ -84,9 +84,11 @@ func (self *Client) handleMail() {
 	for {
 		name, i, err := next(self.p)
 		if err != nil {
-			if strings.Contains(err.Error(), "closed") {
+			if strings.Contains(err.Error(), "closed") || strings.Contains(err.Error(), "reset") {
 				self.Close()
-				self.Start()
+				if e := self.Start(); e != nil {
+					self.errorHandler(fmt.Errorf("While trying to restart after %v: %v", err, e))
+				}
 			} else {
 				if self.errorHandler != nil {
 					self.errorHandler(err)
