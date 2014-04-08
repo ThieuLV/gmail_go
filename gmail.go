@@ -14,10 +14,6 @@ import (
 	"github.com/zond/gmail/xmpp"
 )
 
-const (
-	GMailSMTP = "smtp.gmail.com:587"
-)
-
 func DecodeText(body, mimeContent string) string {
 	_, params, err := mime.ParseMediaType(mimeContent)
 	if err != nil {
@@ -41,9 +37,6 @@ type Client struct {
 	imapClient   *imap.Client
 	mailHandler  imap.MailHandler
 	errorHandler func(e error)
-	smtpHost     string
-	smtpAccount  string
-	smtpPassword string
 }
 
 func New(account, password string) (result *Client) {
@@ -59,9 +52,6 @@ func New(account, password string) (result *Client) {
 		errorHandler: func(e error) {
 			fmt.Println("Error", e)
 		},
-		smtpHost:     GMailSMTP,
-		smtpAccount:  account,
-		smtpPassword: password,
 	}
 	result.xmppClient.MailHandler(func() {
 		if err := result.imapClient.HandleNew(result.mailHandler); err != nil {
@@ -77,28 +67,18 @@ var AddrReg = regexp.MustCompile("(?i)[=A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,4}")
 
 func (self *Client) Send(from, subject, message string, recips ...string) (err error) {
 	body := fmt.Sprintf("Content-Type: text/plain; charset=\"utf-8\"\r\nReply-To: %v\r\nFrom: %v\r\nTo: %v\r\nSubject: %v\r\n\r\n%v", from, from, strings.Join(recips, ", "), subject, message)
-	var auth smtp.Auth
-	if self.smtpPassword != "" {
-		auth = smtp.PlainAuth("", self.smtpAccount, self.smtpPassword, strings.Split(self.smtpHost, ":")[0])
-	}
+	auth := smtp.PlainAuth("", self.account, self.password, "smtp.gmail.com")
 	actualRecips := []string{}
 	for _, recip := range recips {
 		if match := AddrReg.FindString(recip); match != "" {
 			actualRecips = append(actualRecips, match)
 		}
 	}
-	return smtp.SendMail(self.smtpHost, auth, self.smtpAccount, actualRecips, []byte(body))
+	return smtp.SendMail("smtp.gmail.com:587", auth, self.account, actualRecips, []byte(body))
 }
 
 func (self *Client) Debug() *Client {
 	self.xmppClient.Debug()
-	return self
-}
-
-func (self *Client) SMTPHost(host, account, password string) *Client {
-	self.smtpHost = host
-	self.smtpAccount = account
-	self.smtpPassword = password
 	return self
 }
 
