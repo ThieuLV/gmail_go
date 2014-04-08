@@ -78,7 +78,7 @@ var AddrReg = regexp.MustCompile("(?i)[=A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,4}")
 func (self *Client) Send(from, subject, message string, recips ...string) (err error) {
 	body := fmt.Sprintf("Content-Type: text/plain; charset=\"utf-8\"\r\nReply-To: %v\r\nFrom: %v\r\nTo: %v\r\nSubject: %v\r\n\r\n%v", from, from, strings.Join(recips, ", "), subject, message)
 	var auth smtp.Auth
-	if self.smtpAccount != "" {
+	if self.smtpPassword != "" {
 		auth = smtp.PlainAuth("", self.smtpAccount, self.smtpPassword, strings.Split(self.smtpHost, ":")[0])
 	}
 	actualRecips := []string{}
@@ -87,7 +87,7 @@ func (self *Client) Send(from, subject, message string, recips ...string) (err e
 			actualRecips = append(actualRecips, match)
 		}
 	}
-	return smtp.SendMail(self.smtpHost, auth, self.account, actualRecips, []byte(body))
+	return smtp.SendMail(self.smtpHost, auth, self.smtpAccount, actualRecips, []byte(body))
 }
 
 func (self *Client) Debug() *Client {
