@@ -28,7 +28,9 @@ const (
 	nsNotify  = "google:mail:notify"
 )
 
-var DefaultConfig tls.Config
+var DefaultConfig = tls.Config{
+	ServerName: gtalkHost,
+}
 
 type Client struct {
 	conn         *tls.Conn // connection to server
@@ -114,9 +116,6 @@ func (self *Client) connect() (err error) {
 	}
 	self.conn = tls.Client(c, &DefaultConfig)
 	if err = self.conn.Handshake(); err != nil {
-		return
-	}
-	if err = self.conn.VerifyHostname(gtalkHost); err != nil {
 		return
 	}
 	if err = self.init(); err != nil {
